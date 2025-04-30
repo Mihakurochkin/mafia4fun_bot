@@ -1,17 +1,32 @@
-# 🤖 Бот для гри в Мафію у Telegram
+# 🤖 Telegram Mafia Game Bot
 
-Цей бот допомагає організувати гру в "Мафію" прямо в груповому чаті Telegram. Він дозволяє учасникам швидко зареєструватися, а також перевіряє, чи надані всі необхідні права адміністратора.
+This bot helps organize and manage the **"Mafia" party game** directly in a Telegram group chat.  
+It allows players to quickly **register for a new game session** with a single button click and ensures all necessary administrator rights are in place.
 
-## 📦 Можливості
+---
 
-- 📥 Автоматично реагує, коли його додають до групи
-- 🎮 Дозволяє учасникам приєднуватися до гри через кнопку
-- 📋 Показує список зареєстрованих гравців (з клікабельними посиланнями на них)
-- 🔐 Перевіряє наявність прав адміністратора та повідомляє про відсутні
+## 📦 Features
 
-### 🛠 Адміністрування
-Адміністрування, оновлення та технічна підтримка цього бота здійснюються **виключно автором** — [@krchkin](https://t.me/krchkin) або [Mihakurochkin](https://github.com/Mihakurochkin).
+- 📥 Automatically responds when added to a group
+- 🎮 Allows users to **register for the game** with **one click** via an inline button in the chat
+- 📋 Displays a list of registered players (with clickable links to their Telegram profiles)
+- 🔐 Checks for required administrator rights and notifies if any are missing
 
-🔒 Авторські права © 2025
-🤖 Цей бот публічний і доступний для всіх груп і користувачів.
-🛠 Адміністрування, оновлення та технічна підтримка здійснюється виключно автором
+---
+
+## 🛠 Administration
+
+This bot is **public** and available for all users and groups.  
+However, **all administration, updates, and technical support are handled exclusively by the author**:
+
+- Telegram: [@krchkin](https://t.me/krchkin)  
+- GitHub: [Mihakurochkin](https://github.com/Mihakurochkin)
+
+---
+
+## 🔒 License & Ownership
+
+© 2025 — All rights reserved.
+
+All intellectual property rights to the code and functionality of this bot belong exclusively to the author.  
+Unauthorized modification, redistribution, or impersonation of the bot is strictly prohibited without explicit permission.
