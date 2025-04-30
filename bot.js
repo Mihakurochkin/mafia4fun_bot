@@ -1,6 +1,6 @@
-const TelegramBot = require("node-telegram-bot-api");
-const token = "8119403473:AAHlxMGHbXaHx8o97s3Wh0Y1Azgt-GL6KLs";
-const bot = new TelegramBot(token, { polling: true });
+require("dotenv").config();
+import TelegramBot from "node-telegram-bot-api";
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const botUsername = "Mafia4FunBot";
 const commands = [
   { command: "/start", description: "почати реєстрацію на гру" },

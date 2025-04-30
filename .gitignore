@@ -1,0 +1,21 @@
+# Змінні середовища
+.env
+
+# Залежності
+node_modules/
+
+# Логи
+*.log
+
+# Кеши
+.nyc_output/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Системне
+npm-debug.log*
+yarn-debug.log*
