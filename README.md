@@ -3,6 +3,8 @@
 This bot helps organize and manage the **"Mafia" party game** directly in a Telegram group chat.  
 It allows players to quickly **register for a new game session** with a single button click and ensures all necessary administrator rights are in place.
 
+You can start using the bot by clicking the link: [@Mafia4FunBot](https://t.me/Mafia4FunBot)
+
 ---
 
 ## 📦 Features
