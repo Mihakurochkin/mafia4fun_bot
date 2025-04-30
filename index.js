@@ -1,5 +1,5 @@
 require("dotenv").config();
-import TelegramBot from "node-telegram-bot-api";
+const TelegramBot = require("node-telegram-bot-api");
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const botUsername = "Mafia4FunBot";
 const commands = [
@@ -8,70 +8,11 @@ const commands = [
   { command: "/stop", description: "зупинити реєстрацію" },
 ];
 const players = [];
-const allRights = false;
-
-bot
-  .setMyCommands(commands)
-  .then(() => {
-    console.log("Commands set successfully");
-  })
-  .catch((error) => {
-    console.error("Error setting commands:", error);
-  });
-
-bot.on("new_chat_members", (msg) => {
-  const newMembers = msg.new_chat_members;
-
-  newMembers.forEach((member) => {
-    if (member.username === bot.username || member.is_bot) {
-      bot.sendMessage(
-        msg.chat.id,
-        `Привіт!
-Я бот для гри в Мафію 🎭. Для роботи мені потрібні наступні права адміністратора:
-- Видалення повідомлень
-- Обмеження інших учасників
-- Закріплення повідомлень`
-      );
-    }
-  });
-});
-
-bot.on("my_chat_member", (msg) => {
-  if (msg.new_chat_member.status !== 'administrator') return;
-
-  const newChatMember = msg.new_chat_member;
-
-  const rights = [
-    [newChatMember.can_delete_messages, '- Видалення повідомлень'],
-    [newChatMember.can_restrict_members, '- Обмеження інших учасників'], 
-    [newChatMember.can_pin_messages, '- Закріплення повідомлень'],
-  ];
-
-  const missingRights = [];
-
-  rights.forEach((right) => {
-    if (!right[0]) {
-      missingRights.push(right[1]);
-    }
-  });
-
-  if (missingRights.length > 0) {
-    bot.sendMessage(
-      msg.chat.id,
-      `Дякую, що зробили мене адміном!\n\nАле мені не вистачає кількох важливих прав:\n${missingRights.join('\n')}`
-    );
-  } else {
-    bot.sendMessage(
-      msg.chat.id,
-      `Дякую! Тепер у мене є всі необхідні права адміністратора для гри в Мафію 🕵️‍♂️`
-    );
-  }
-});
-
+let allRights = false;
 let timeout = 60;
 let isStarted = false;
 
-bot.onText("старт" || `/start@${botUsername}`, (msg, match) => {
+function startGameRegistration(msg) {
   timeout = 60;
   isStarted = true;
 
@@ -111,16 +52,88 @@ bot.onText("старт" || `/start@${botUsername}`, (msg, match) => {
       timeout -= 1;
     }, 1000);
   } else {
-    bot.sendMessage(msg.chat.id, `Схоже що мені надано не всі права адміністратора з цього списку:
+    bot.sendMessage(
+      msg.chat.id,
+      `Схоже що мені надано не всі права адміністратора з цього списку:
 * Видалення повідомлень
 * Обмеження інших учасників
-* Закріплення повідомлень`);
+* Закріплення повідомлень`
+    );
   }
   bot.deleteMessage(msg.chat.id, msg.message_id);
+}
+
+bot
+  .setMyCommands(commands)
+  .then(() => {
+    console.log("Commands set successfully");
+  })
+  .catch((error) => {
+    console.error("Error setting commands:", error);
+  });
+
+bot.on("new_chat_members", (msg) => {
+  const newMembers = msg.new_chat_members;
+
+  newMembers.forEach((member) => {
+    if (member.username === bot.username || member.is_bot) {
+      bot.sendMessage(
+        msg.chat.id,
+        `Привіт!
+Я бот для гри в Мафію 🎭. Для роботи мені потрібні наступні права адміністратора:
+- Видалення повідомлень
+- Обмеження інших учасників
+- Закріплення повідомлень`
+      );
+    }
+  });
+});
+
+bot.on("my_chat_member", (msg) => {
+  if (msg.new_chat_member.status !== "administrator") return;
+
+  const newChatMember = msg.new_chat_member;
+
+  const rights = [
+    [newChatMember.can_delete_messages, "- Видалення повідомлень"],
+    [newChatMember.can_restrict_members, "- Обмеження інших учасників"],
+    [newChatMember.can_pin_messages, "- Закріплення повідомлень"],
+  ];
+
+  const missingRights = [];
+
+  rights.forEach((right) => {
+    if (!right[0]) {
+      missingRights.push(right[1]);
+    }
+  });
+
+  if (missingRights.length > 0) {
+    bot.sendMessage(
+      msg.chat.id,
+      `Дякую, що зробили мене адміном!\n\nАле мені не вистачає кількох важливих прав:\n${missingRights.join(
+        "\n"
+      )}`
+    );
+    allRights = false;
+  } else {
+    bot.sendMessage(
+      msg.chat.id,
+      `Дякую! Тепер у мене є всі необхідні права адміністратора для гри в Мафію 🕵️‍♂️`
+    );
+    allRights = true;
+  }
+});
+
+bot.onText(`/start@${botUsername}`, (msg) => {
+  startGameRegistration(msg);
+});
+
+bot.onText("старт", (msg) => {
+  startGameRegistration(msg);
 });
 
 bot.on("callback_query", (callbackQuery) => {
-  const msg = callbackQuery.message;
   const user = callbackQuery.from;
 
   if (callbackQuery.data === "join_game") {
