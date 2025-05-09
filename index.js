@@ -21,6 +21,9 @@ const players = [];
 const groupRights = new Map();
 let timeout = 60;
 let isStarted = false;
+let isNight = false;
+let gameChatId = null;
+const warningCooldowns = new Map(); // Track warning cooldowns for users
 
 async function checkBotRights(chatId) {
   if (!botInfo) {
@@ -78,6 +81,7 @@ function startGameRegistration(msg) {
 
   timeout = 60;
   isStarted = true;
+  gameChatId = msg.chat.id;
 
   checkBotRights(msg.chat.id).then(({ hasRights, missingRights }) => {
     if (hasRights) {
@@ -89,10 +93,7 @@ function startGameRegistration(msg) {
           `⏱ Час до кінця: ${timeout} секунд\n` +
           `👥 Зареєстровані гравці (${players.length}):\n` +
           players.map((player, index) => {
-            const mention = player.username 
-              ? `@${player.username}`
-              : `<a href="tg://user?id=${player.id}">${player.name}</a>`;
-            return `${index + 1}. ${mention}`;
+            return `${index + 1}. <a href="tg://user?id=${player.id}">${player.name}</a>`;
           }).join('\n');
 
         if (messageText !== lastMessageText) {
@@ -151,14 +152,67 @@ function startGameRegistration(msg) {
         }
         
         if (timeout === 0) {
-          bot.editMessageText("<b>Гра починається!</b>", {
+          if (players.length < 4) {
+            const messageText = `<b>Реєстрацію зупинено</b>\n\n` +
+              `❌ Недостатньо гравців для початку гри.\n` +
+              `👥 Зареєстровано: ${players.length}/4\n\n` +
+              `Спробуйте розпочати реєстрацію знову.`;
+
+            bot.editMessageText(messageText, {
+              chat_id: msg.chat.id,
+              message_id: registrationMessage.message_id,
+              parse_mode: "HTML",
+            }).catch(error => {
+              console.error("Error sending insufficient players message:", error.message);
+            });
+
+            isStarted = false;
+            clearInterval(intervalId);
+            return;
+          }
+
+          // Send success message in the game chat
+          bot.sendMessage(msg.chat.id, 
+            `✅ Реєстрація успішно завершена!\n` +
+            `👥 Кількість гравців: ${players.length}\n` +
+            `🎮 Гра починається...`,
+            { parse_mode: "HTML" }
+          ).catch(error => {
+            console.error("Error sending registration success message:", error.message);
+          });
+
+          const mafiaCount = Math.floor(players.length / 4);
+          const messageText = `<b>Гра починається!</b>\n\n` +
+            `👥 Розподіл ролей:\n` +
+            `- Мафіози: ${mafiaCount}\n` +
+            `- Доктор: 1\n` +
+            `- Комісар: 1\n` +
+            `- Мирні жителі: ${players.length - mafiaCount - 2}\n\n` +
+            `🌙 Настала ніч. Всі засинають...\n\n` +
+            `📱 Перевірте свої ролі в приватних повідомленнях.\n\n` +
+            `⚠️ Під час ночі заборонено писати повідомлення в чат!`;
+
+          bot.editMessageText(messageText, {
             chat_id: msg.chat.id,
             message_id: registrationMessage.message_id,
             parse_mode: "HTML",
           }).catch(error => {
             console.error("Error sending game start message:", error.message);
           });
+
+          // Send private messages to each player with their role
+          players.forEach(player => {
+            bot.sendMessage(
+              player.id,
+              "Перевірте свою роль в наступному повідомленні...",
+              { parse_mode: "HTML" }
+            ).catch(error => {
+              console.error(`Error sending role message to ${player.name}:`, error.message);
+            });
+          });
+
           isStarted = false;
+          isNight = true;
           clearInterval(intervalId);
           return;
         }
@@ -181,6 +235,33 @@ function startGameRegistration(msg) {
     }
   });
 }
+
+// Add message handler for night phase
+bot.on("message", async (msg) => {
+  if (isNight && msg.chat.id === gameChatId && !msg.from.is_bot) {
+    const userId = msg.from.id;
+    const lastWarning = warningCooldowns.get(userId) || 0;
+    const now = Date.now();
+    
+    // Delete any messages during night phase
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
+      console.error("Error deleting night message:", error.message);
+    });
+    
+    // Only send warning if 30 seconds have passed since last warning
+    if (now - lastWarning > 30000) {
+      bot.sendMessage(
+        msg.chat.id,
+        "⚠️ Під час ночі заборонено писати повідомлення в чат!",
+        { reply_to_message_id: msg.message_id }
+      ).catch(error => {
+        console.error("Error sending night warning:", error.message);
+      });
+      
+      warningCooldowns.set(userId, now);
+    }
+  }
+});
 
 bot.on("new_chat_members", async (msg) => {
   if (!botInfo) {
