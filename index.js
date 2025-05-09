@@ -1,190 +1,285 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-const botUsername = "Mafia4FunBot";
+let botInfo = null;
+
+// Initialize bot info
+bot.getMe().then(info => {
+  botInfo = info;
+  console.log(`Bot initialized with username: @${botInfo.username}`);
+}).catch(error => {
+  console.error('Error getting bot info:', error);
+  process.exit(1);
+});
+
 const commands = [
   { command: "/start", description: "почати реєстрацію на гру" },
   { command: "/extend", description: "продовжити реєстрацію на 30 секунд" },
   { command: "/stop", description: "зупинити реєстрацію" },
 ];
 const players = [];
-let allRights = false;
+const groupRights = new Map();
 let timeout = 60;
 let isStarted = false;
 
 async function checkBotRights(chatId) {
-  try {
-    const chatMember = await bot.getChatMember(chatId, botUsername);
-    if (chatMember.status === "administrator") {
-      const missingRights = checkRights({
-        can_delete_messages: chatMember.can_delete_messages,
-        can_restrict_members: chatMember.can_restrict_members,
-        can_pin_messages: chatMember.can_pin_messages
-      });
-      if (missingRights.length === 0) {
-        allRights = true;
-      } else {
-        allRights = false;
-      }
-    } else {
-      allRights = false;
-    }
-  } catch (error) {
-    allRights = false;
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return { hasRights: false, missingRights: ["помилка ініціалізації бота"] };
   }
+
+  try {
+    const chatMember = await bot.getChatMember(chatId, botInfo.id);
+    const hasAllRights = chatMember.status === "administrator" && 
+                        chatMember.can_delete_messages && 
+                        chatMember.can_restrict_members && 
+                        chatMember.can_pin_messages;
+    
+    const missingRights = [];
+    if (chatMember.status !== "administrator") {
+      missingRights.push("адміністратор");
+    } else {
+      if (!chatMember.can_delete_messages) missingRights.push("видалення повідомлень");
+      if (!chatMember.can_restrict_members) missingRights.push("обмеження учасників");
+      if (!chatMember.can_pin_messages) missingRights.push("закріплення повідомлень");
+    }
+    
+    groupRights.set(chatId, {
+      hasRights: hasAllRights,
+      missingRights: missingRights
+    });
+    
+    return { hasRights: hasAllRights, missingRights };
+  } catch (error) {
+    console.error(`Error checking rights for chat ${chatId}:`, error.message);
+    groupRights.set(chatId, {
+      hasRights: false,
+      missingRights: ["невідомі права (помилка перевірки)"]
+    });
+    return { hasRights: false, missingRights: ["невідомі права (помилка перевірки)"] };
+  }
+}
+
+function hasRights(chatId) {
+  const rights = groupRights.get(chatId);
+  return rights ? rights.hasRights : false;
+}
+
+function getMissingRightsMessage(missingRights) {
+  if (!missingRights || missingRights.length === 0) return "";
+  return `\n\nВідсутні права:\n${missingRights.map(right => `- ${right}`).join('\n')}`;
 }
 
 function startGameRegistration(msg) {
+  if (isStarted) {
+    bot.sendMessage(msg.chat.id, "Реєстрація вже почалась!");
+    return;
+  }
+
   timeout = 60;
   isStarted = true;
 
-  if (allRights) {
-    bot.sendMessage(msg.chat.id, `<b>Реєстрація на гру почалась</b>`, {
-      parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "Приєднатися",
-              callback_data: "join_game",
-            },
-          ],
-        ],
-      },
-    });
+  checkBotRights(msg.chat.id).then(({ hasRights, missingRights }) => {
+    if (hasRights) {
+      let registrationMessage = null;
+      let lastMessageText = "";
 
-    const intervalId = setInterval(() => {
-      switch (timeout) {
-        case 30:
-          bot.sendMessage(
-            msg.chat.id,
-            "До закінчення реєстрації залишилось 30 секунд"
-          );
-          break;
-        case -1:
+      const sendRegistrationMessage = () => {
+        const messageText = `<b>Реєстрація на гру почалась</b>\n\n` +
+          `⏱ Час до кінця: ${timeout} секунд\n` +
+          `👥 Зареєстровані гравці (${players.length}):\n` +
+          players.map((player, index) => {
+            const mention = player.username 
+              ? `@${player.username}`
+              : `<a href="tg://user?id=${player.id}">${player.name}</a>`;
+            return `${index + 1}. ${mention}`;
+          }).join('\n');
+
+        if (messageText !== lastMessageText) {
+          lastMessageText = messageText;
+          
+          if (!registrationMessage) {
+            bot.sendMessage(msg.chat.id, messageText, {
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "Приєднатися",
+                      callback_data: "join_game",
+                    },
+                  ],
+                ],
+              },
+            }).then(message => {
+              registrationMessage = message;
+            }).catch(error => {
+              console.error("Error sending registration message:", error.message);
+              isStarted = false;
+            });
+          } else {
+            bot.editMessageText(messageText, {
+              chat_id: msg.chat.id,
+              message_id: registrationMessage.message_id,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "Приєднатися",
+                      callback_data: "join_game",
+                    },
+                  ],
+                ],
+              },
+            }).catch(error => {
+              console.error("Error updating registration message:", error.message);
+              isStarted = false;
+            });
+          }
+        }
+      };
+
+      sendRegistrationMessage();
+
+      const intervalId = setInterval(() => {
+        if (timeout === -1) {
           clearInterval(intervalId);
-          break;
-        case 0:
-          bot.sendMessage(msg.chat.id, "<b>Гра починається!</b>", {
+          return;
+        }
+        
+        if (timeout === 0) {
+          bot.editMessageText("<b>Гра починається!</b>", {
+            chat_id: msg.chat.id,
+            message_id: registrationMessage.message_id,
             parse_mode: "HTML",
+          }).catch(error => {
+            console.error("Error sending game start message:", error.message);
           });
           isStarted = false;
           clearInterval(intervalId);
-      }
-      timeout -= 1;
-    }, 1000);
-    bot.deleteMessage(msg.chat.id, msg.message_id);
-  } else {
-    bot.sendMessage(
-      msg.chat.id,
-      `Схоже що мені надано не всі права адміністратора з цього списку:
-- Видалення повідомлень
-- Обмеження інших учасників
-- Закріплення повідомлень`
-    );
-  }
-}
+          return;
+        }
 
-function checkRights(newChatMember) {
-  const rightsList = [
-    [newChatMember.can_delete_messages, "- Видалення повідомлень"],
-    [newChatMember.can_restrict_members, "- Обмеження інших учасників"],
-    [newChatMember.can_pin_messages, "- Закріплення повідомлень"],
-  ];
-  const missingRights = [];
+        if (timeout % 5 === 0 || timeout <= 10) {
+          sendRegistrationMessage();
+        }
+        timeout -= 1;
+      }, 1000);
 
-  rightsList.forEach((right) => {
-    if (!right[0]) {
-      missingRights.push(right[1]);
-    }
-  });
-
-  return missingRights;
-}
-
-bot
-  .setMyCommands(commands)
-  .then(() => {
-    return checkBotRights(process.env.GROUP_ID);
-  })
-  .catch((error) => {
-    allRights = false;
-  });
-
-bot.on("new_chat_members", (msg) => {
-  const newMembers = msg.new_chat_members;
-
-  newMembers.forEach((member) => {
-    if (member.username === bot.username || member.is_bot) {
+      bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
+        console.error("Error deleting command message:", error.message);
+      });
+    } else {
       bot.sendMessage(
         msg.chat.id,
-        `Привіт!
-Я бот для гри в Мафію 🎭. Для роботи мені потрібні наступні права адміністратора:
-- Видалення повідомлень
-- Обмеження інших учасників
-- Закріплення повідомлень`
+        `Для початку гри мені потрібні наступні права адміністратора:${getMissingRightsMessage(missingRights)}`
       );
+      isStarted = false;
     }
   });
+}
+
+bot.on("new_chat_members", async (msg) => {
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return;
+  }
+
+  const newMembers = msg.new_chat_members;
+
+  for (const member of newMembers) {
+    if (member.id === botInfo.id || member.is_bot) {
+      const { missingRights } = await checkBotRights(msg.chat.id);
+      bot.sendMessage(
+        msg.chat.id,
+        `Привіт! Я бот для гри в Мафію 🎭.${getMissingRightsMessage(missingRights)}`
+      );
+    }
+  }
 });
 
-bot.on("my_chat_member", (msg) => {
-  if (msg.new_chat_member.status !== "administrator") return;
+bot.on("my_chat_member", async (msg) => {
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return;
+  }
 
-  if (checkRights(msg.new_chat_member).length === 0) {
+  const { hasRights, missingRights } = await checkBotRights(msg.chat.id);
+  if (hasRights) {
     bot.sendMessage(
       msg.chat.id,
       `Дякую! Тепер у мене є всі необхідні права адміністратора для гри в Мафію 🕵️‍♂️`
     );
-    allRights = true;
   } else {
     bot.sendMessage(
       msg.chat.id,
-      `Дякую, що зробили мене адміном!\n\nАле мені не вистачає кількох важливих прав:\n${checkRights(
-        msg.new_chat_member
-      ).join("\n")}`
+      `Дякую, що зробили мене адміном!${getMissingRightsMessage(missingRights)}`
     );
-    allRights = false;
   }
 });
 
-bot.onText(`/start@${botUsername}`, (msg) => {
+// Command handlers
+bot.onText(/^\/start(@\w+)?$/, (msg, match) => {
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return;
+  }
+  
+  // Check if the command is for this bot
+  if (!match[1] || match[1] === `@${botInfo.username}`) {
+    startGameRegistration(msg);
+  }
+});
+
+bot.onText(/^старт$/, (msg) => {
   startGameRegistration(msg);
 });
 
-bot.onText("старт", (msg) => {
-  startGameRegistration(msg);
-});
+bot.onText(/^\/stop(@\w+)?$/, (msg, match) => {
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return;
+  }
 
-bot.on("callback_query", (callbackQuery) => {
-  const user = callbackQuery.from;
-
-  if (callbackQuery.data === "join_game") {
-    const username =
-      `${user.first_name} ${user.last_name || ""}`.trim() || user.username;
-
-    if (!players.find((player) => player.id === user.id)) {
-      players.push({ id: user.id, name: username });
+  // Check if the command is for this bot
+  if (!match[1] || match[1] === `@${botInfo.username}`) {
+    if (isStarted) {
+      timeout = -1;
+      bot.sendMessage(msg.chat.id, "<b>Реєстрацію на гру зупинено</b>", {
+        parse_mode: "HTML",
+      }).catch(error => {
+        console.error("Error sending stop message:", error.message);
+      });
+      bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
+        console.error("Error deleting stop command:", error.message);
+      });
+      isStarted = false;
+    } else {
+      bot.sendMessage(msg.chat.id, `Цю команду є сенс використовувати після використання команди /start@${botInfo.username}`);
     }
   }
 });
 
-bot.onText(`/stop@${botUsername}`, (msg) => {
-  if (isStarted) {
-    timeout = -1;
-    bot.sendMessage(msg.chat.id, "<b>Реєстрацію на гру зупинено</b>", {
-      parse_mode: "HTML",
-    });
-    bot.deleteMessage(msg.chat.id, msg.message_id);
-    isStarted = false;
-  } else {
-    bot.sendMessage(msg.chat.id, `Цю команду є сенс використовувати після використання команди /start@${botUsername}`);
+bot.onText(/^\/extend(@\w+)?$/, (msg, match) => {
+  if (!botInfo) {
+    console.error('Bot info not initialized');
+    return;
   }
-});
 
-bot.onText(`/extend@${botUsername}`, (msg) => {
-  timeout += 30;
-  if (isStarted) {
+  // Check if the command is for this bot
+  if (!match[1] || match[1] === `@${botInfo.username}`) {
+    if (!isStarted) {
+      bot.sendMessage(
+        msg.chat.id,
+        `Перш ніж використати цю команду, почніть реєстрацію на гру за допомогою команди: /start@${botInfo.username}`
+      );
+      return;
+    }
+
+    timeout += 30;
     bot.sendMessage(
       msg.chat.id,
       `До часу реєстрації додано 30 секунд. До кінця реєстрації: ${
@@ -196,18 +291,32 @@ bot.onText(`/extend@${botUsername}`, (msg) => {
             }`
           : `${timeout} секунд`
       }`
-    );
-  } else {
-    bot.sendMessage(
-      msg.chat.id,
-      `Перш ніж використати цю команду, почніть реєстрацію на гру за допомогою команди: /start@${botUsername}`
-    );
+    ).catch(error => {
+      console.error("Error sending extend message:", error.message);
+    });
+    
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
+      console.error("Error deleting extend command:", error.message);
+    });
   }
-  bot.deleteMessage(msg.chat.id, msg.message_id);
 });
 
-bot.on("message", async (msg) => {
-  if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
-    await checkBotRights(msg.chat.id);
+bot.on("callback_query", (callbackQuery) => {
+  const user = callbackQuery.from;
+
+  if (callbackQuery.data === "join_game") {
+    const username = user.username || "";
+    const fullName = `${user.first_name} ${user.last_name || ""}`.trim() || user.username;
+
+    if (!players.find((player) => player.id === user.id)) {
+      players.push({ 
+        id: user.id, 
+        name: fullName,
+        username: username
+      });
+      bot.answerCallbackQuery(callbackQuery.id).catch(error => {
+        console.error("Error answering callback query:", error.message);
+      });
+    }
   }
 });
