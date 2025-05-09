@@ -12,6 +12,28 @@ let allRights = false;
 let timeout = 60;
 let isStarted = false;
 
+async function checkBotRights(chatId) {
+  try {
+    const chatMember = await bot.getChatMember(chatId, botUsername);
+    if (chatMember.status === "administrator") {
+      const missingRights = checkRights({
+        can_delete_messages: chatMember.can_delete_messages,
+        can_restrict_members: chatMember.can_restrict_members,
+        can_pin_messages: chatMember.can_pin_messages
+      });
+      if (missingRights.length === 0) {
+        allRights = true;
+      } else {
+        allRights = false;
+      }
+    } else {
+      allRights = false;
+    }
+  } catch (error) {
+    allRights = false;
+  }
+}
+
 function startGameRegistration(msg) {
   timeout = 60;
   isStarted = true;
@@ -51,25 +73,42 @@ function startGameRegistration(msg) {
       }
       timeout -= 1;
     }, 1000);
+    bot.deleteMessage(msg.chat.id, msg.message_id);
   } else {
     bot.sendMessage(
       msg.chat.id,
       `Схоже що мені надано не всі права адміністратора з цього списку:
-* Видалення повідомлень
-* Обмеження інших учасників
-* Закріплення повідомлень`
+- Видалення повідомлень
+- Обмеження інших учасників
+- Закріплення повідомлень`
     );
   }
-  bot.deleteMessage(msg.chat.id, msg.message_id);
+}
+
+function checkRights(newChatMember) {
+  const rightsList = [
+    [newChatMember.can_delete_messages, "- Видалення повідомлень"],
+    [newChatMember.can_restrict_members, "- Обмеження інших учасників"],
+    [newChatMember.can_pin_messages, "- Закріплення повідомлень"],
+  ];
+  const missingRights = [];
+
+  rightsList.forEach((right) => {
+    if (!right[0]) {
+      missingRights.push(right[1]);
+    }
+  });
+
+  return missingRights;
 }
 
 bot
   .setMyCommands(commands)
   .then(() => {
-    console.log("Commands set successfully");
+    return checkBotRights(process.env.GROUP_ID);
   })
   .catch((error) => {
-    console.error("Error setting commands:", error);
+    allRights = false;
   });
 
 bot.on("new_chat_members", (msg) => {
@@ -92,36 +131,20 @@ bot.on("new_chat_members", (msg) => {
 bot.on("my_chat_member", (msg) => {
   if (msg.new_chat_member.status !== "administrator") return;
 
-  const newChatMember = msg.new_chat_member;
-
-  const rights = [
-    [newChatMember.can_delete_messages, "- Видалення повідомлень"],
-    [newChatMember.can_restrict_members, "- Обмеження інших учасників"],
-    [newChatMember.can_pin_messages, "- Закріплення повідомлень"],
-  ];
-
-  const missingRights = [];
-
-  rights.forEach((right) => {
-    if (!right[0]) {
-      missingRights.push(right[1]);
-    }
-  });
-
-  if (missingRights.length > 0) {
-    bot.sendMessage(
-      msg.chat.id,
-      `Дякую, що зробили мене адміном!\n\nАле мені не вистачає кількох важливих прав:\n${missingRights.join(
-        "\n"
-      )}`
-    );
-    allRights = false;
-  } else {
+  if (checkRights(msg.new_chat_member).length === 0) {
     bot.sendMessage(
       msg.chat.id,
       `Дякую! Тепер у мене є всі необхідні права адміністратора для гри в Мафію 🕵️‍♂️`
     );
     allRights = true;
+  } else {
+    bot.sendMessage(
+      msg.chat.id,
+      `Дякую, що зробили мене адміном!\n\nАле мені не вистачає кількох важливих прав:\n${checkRights(
+        msg.new_chat_member
+      ).join("\n")}`
+    );
+    allRights = false;
   }
 });
 
@@ -147,11 +170,16 @@ bot.on("callback_query", (callbackQuery) => {
 });
 
 bot.onText(`/stop@${botUsername}`, (msg) => {
-  timeout = -1;
-  bot.sendMessage(msg.chat.id, "<b>Реєстрацію на гру зупинено</b>", {
-    parse_mode: "HTML",
-  });
-  bot.deleteMessage(msg.chat.id, msg.message_id);
+  if (isStarted) {
+    timeout = -1;
+    bot.sendMessage(msg.chat.id, "<b>Реєстрацію на гру зупинено</b>", {
+      parse_mode: "HTML",
+    });
+    bot.deleteMessage(msg.chat.id, msg.message_id);
+    isStarted = false;
+  } else {
+    bot.sendMessage(msg.chat.id, `Цю команду є сенс використовувати після використання команди /start@${botUsername}`);
+  }
 });
 
 bot.onText(`/extend@${botUsername}`, (msg) => {
@@ -176,4 +204,10 @@ bot.onText(`/extend@${botUsername}`, (msg) => {
     );
   }
   bot.deleteMessage(msg.chat.id, msg.message_id);
+});
+
+bot.on("message", async (msg) => {
+  if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
+    await checkBotRights(msg.chat.id);
+  }
 });
