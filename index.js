@@ -3,7 +3,6 @@ const TelegramBot = require("node-telegram-bot-api");
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 let botInfo = null;
 
-// Initialize bot info
 bot.getMe().then(info => {
   botInfo = info;
   console.log(`Bot initialized with username: @${botInfo.username}`);
@@ -23,7 +22,31 @@ let timeout = 60;
 let isStarted = false;
 let isNight = false;
 let gameChatId = null;
-const warningCooldowns = new Map(); // Track warning cooldowns for users
+const warningCooldowns = new Map();
+
+function assignRoles(players) {
+  const roles = [];
+  const mafiaCount = Math.floor(players.length / 4);
+  
+  for (let i = 0; i < mafiaCount; i++) {
+    roles.push('mafia');
+  }
+  roles.push('doctor');
+  roles.push('commissioner');
+  while (roles.length < players.length) {
+    roles.push('peaceful');
+  }
+  
+  for (let i = roles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [roles[i], roles[j]] = [roles[j], roles[i]];
+  }
+  
+  return players.map((player, index) => ({
+    ...player,
+    role: roles[index]
+  }));
+}
 
 async function checkBotRights(chatId) {
   if (!botInfo) {
@@ -115,6 +138,9 @@ function startGameRegistration(msg) {
               },
             }).then(message => {
               registrationMessage = message;
+              bot.pinChatMessage(msg.chat.id, message.message_id).catch(error => {
+                console.error("Error pinning registration message:", error.message);
+              });
             }).catch(error => {
               console.error("Error sending registration message:", error.message);
               isStarted = false;
@@ -152,10 +178,10 @@ function startGameRegistration(msg) {
         }
         
         if (timeout === 0) {
-          if (players.length < 4) {
+          if (players.length < 1) {
             const messageText = `<b>Реєстрацію зупинено</b>\n\n` +
               `❌ Недостатньо гравців для початку гри.\n` +
-              `👥 Зареєстровано: ${players.length}/4\n\n` +
+              `👥 Зареєстровано: ${players.length}/1\n\n` +
               `Спробуйте розпочати реєстрацію знову.`;
 
             bot.editMessageText(messageText, {
@@ -171,7 +197,6 @@ function startGameRegistration(msg) {
             return;
           }
 
-          // Send success message in the game chat
           bot.sendMessage(msg.chat.id, 
             `✅ Реєстрація успішно завершена!\n` +
             `👥 Кількість гравців: ${players.length}\n` +
@@ -190,7 +215,10 @@ function startGameRegistration(msg) {
             `- Мирні жителі: ${players.length - mafiaCount - 2}\n\n` +
             `🌙 Настала ніч. Всі засинають...\n\n` +
             `📱 Перевірте свої ролі в приватних повідомленнях.\n\n` +
-            `⚠️ Під час ночі заборонено писати повідомлення в чат!`;
+            `👥 Живі гравці (${players.length}):\n` +
+            players.map((player, index) => {
+              return `${index + 1}. <a href="tg://user?id=${player.id}">${player.name}</a>`;
+            }).join('\n');
 
           bot.editMessageText(messageText, {
             chat_id: msg.chat.id,
@@ -200,11 +228,38 @@ function startGameRegistration(msg) {
             console.error("Error sending game start message:", error.message);
           });
 
-          // Send private messages to each player with their role
-          players.forEach(player => {
+          const playersWithRoles = assignRoles(players);
+          playersWithRoles.forEach(player => {
+            let roleMessage = '';
+            switch(player.role) {
+              case 'mafia':
+                roleMessage = `🎭 Ви - Мафія!\n\n` +
+                  `Ваше завдання - усувати мирних жителів по черзі.\n` +
+                  `Ви знаєте інших мафіозів: ${playersWithRoles
+                    .filter(p => p.role === 'mafia' && p.id !== player.id)
+                    .map(p => p.name)
+                    .join(', ')}`;
+                break;
+              case 'doctor':
+                roleMessage = `👨‍⚕️ Ви - Лікар!\n\n` +
+                  `Ваше завдання - рятувати гравців від мафії.\n` +
+                  `Кожну ніч ви можете вибрати одного гравця для порятунку.`;
+                break;
+              case 'commissioner':
+                roleMessage = `👮 Ви - Комісар!\n\n` +
+                  `Ваше завдання - викривати мафію.\n` +
+                  `Кожну ніч ви можете перевірити роль одного гравця.`;
+                break;
+              case 'peaceful':
+                roleMessage = `👨‍🌾 Ви - Мирний житель!\n\n` +
+                  `Ваше завдання - знайти та усунути мафію.\n` +
+                  `Обговорюйте та голосуйте разом з іншими гравцями.`;
+                break;
+            }
+
             bot.sendMessage(
               player.id,
-              "Перевірте свою роль в наступному повідомленні...",
+              roleMessage,
               { parse_mode: "HTML" }
             ).catch(error => {
               console.error(`Error sending role message to ${player.name}:`, error.message);
@@ -236,19 +291,16 @@ function startGameRegistration(msg) {
   });
 }
 
-// Add message handler for night phase
 bot.on("message", async (msg) => {
   if (isNight && msg.chat.id === gameChatId && !msg.from.is_bot) {
     const userId = msg.from.id;
     const lastWarning = warningCooldowns.get(userId) || 0;
     const now = Date.now();
     
-    // Delete any messages during night phase
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
       console.error("Error deleting night message:", error.message);
     });
     
-    // Only send warning if 30 seconds have passed since last warning
     if (now - lastWarning > 30000) {
       bot.sendMessage(
         msg.chat.id,
@@ -309,7 +361,6 @@ bot.onText(/^\/start(@\w+)?$/, (msg, match) => {
     return;
   }
   
-  // Check if the command is for this bot
   if (!match[1] || match[1] === `@${botInfo.username}`) {
     startGameRegistration(msg);
   }
@@ -325,7 +376,6 @@ bot.onText(/^\/stop(@\w+)?$/, (msg, match) => {
     return;
   }
 
-  // Check if the command is for this bot
   if (!match[1] || match[1] === `@${botInfo.username}`) {
     if (isStarted) {
       timeout = -1;
@@ -350,7 +400,6 @@ bot.onText(/^\/extend(@\w+)?$/, (msg, match) => {
     return;
   }
 
-  // Check if the command is for this bot
   if (!match[1] || match[1] === `@${botInfo.username}`) {
     if (!isStarted) {
       bot.sendMessage(

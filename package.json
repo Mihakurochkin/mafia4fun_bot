@@ -1,16 +1,16 @@
 {
   "name": "mafia4bot",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Telegram bot for playing Mafia game",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "dotenv": "^16.5.0",
-    "node-telegram-bot-api": "^0.66.0"
+    "dotenv": "^16.0.3",
+    "node-telegram-bot-api": "^0.61.0"
   }
 }
