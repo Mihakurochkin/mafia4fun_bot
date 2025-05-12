@@ -1,29 +1,21 @@
-const { bot, botInfo } = require('./config/bot');
-const { isNight, gameChatId, warningCooldowns } = require('./utils/gameState');
+const { bot, botInfo, commands } = require('./config/bot');
+const { isNight, gameChatId } = require('./utils/gameState');
 const { checkBotRights, getMissingRightsMessage } = require('./utils/rights');
 const { setupCommandHandlers } = require('./handlers/commands');
+const { setupRoleActions } = require('./handlers/roleActions');
+const { setupGeminiCommands } = require('./handlers/geminiCommands');
+
+bot.setMyCommands(commands).then(() => {
+  console.log('Bot commands set successfully');
+}).catch(error => {
+  console.error('Error setting bot commands:', error);
+});
 
 bot.on("message", async (msg) => {
   if (isNight && msg.chat.id === gameChatId && !msg.from.is_bot) {
-    const userId = msg.from.id;
-    const lastWarning = warningCooldowns.get(userId) || 0;
-    const now = Date.now();
-    
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
       console.error("Error deleting night message:", error.message);
     });
-    
-    if (now - lastWarning > 30000) {
-      bot.sendMessage(
-        msg.chat.id,
-        "⚠️ Під час ночі заборонено писати повідомлення в чат!",
-        { reply_to_message_id: msg.message_id }
-      ).catch(error => {
-        console.error("Error sending night warning:", error.message);
-      });
-      
-      warningCooldowns.set(userId, now);
-    }
   }
 });
 
@@ -66,4 +58,6 @@ bot.on("my_chat_member", async (msg) => {
   }
 });
 
-setupCommandHandlers(); 
+setupCommandHandlers();
+setupRoleActions();
+setupGeminiCommands(); 

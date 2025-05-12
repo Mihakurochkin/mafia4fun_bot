@@ -1,11 +1,12 @@
-const players = [];
+let players = [];
 const groupRights = new Map();
 const warningCooldowns = new Map();
 
-let timeout = 60;
+let timeout = 30;
 let isStarted = false;
 let isNight = false;
 let gameChatId = null;
+let nightTimeout = null;
 
 function assignRoles(players) {
   const roles = [];
@@ -27,8 +28,20 @@ function assignRoles(players) {
   
   return players.map((player, index) => ({
     ...player,
-    role: roles[index]
+    role: roles[index],
+    isAlive: true
   }));
+}
+
+function startNightPhase() {
+  isNight = true;
+  if (nightTimeout) {
+    clearTimeout(nightTimeout);
+  }
+  nightTimeout = setTimeout(() => {
+    isNight = false;
+    processNightActions();
+  }, 60000);
 }
 
 module.exports = {
@@ -39,5 +52,6 @@ module.exports = {
   isStarted,
   isNight,
   gameChatId,
-  assignRoles
+  assignRoles,
+  startNightPhase
 }; 

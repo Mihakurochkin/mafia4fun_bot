@@ -1,13 +1,11 @@
 const { bot, botInfo } = require('../config/bot');
 const { players, isStarted, timeout } = require('../utils/gameState');
 const { startGameRegistration } = require('./registration');
+const { sendRoleActionMessages } = require('./roleActions');
 
 function setupCommandHandlers() {
   bot.onText(/^\/start(@\w+)?$/, (msg, match) => {
-    if (!botInfo) {
-      console.error('Bot info not initialized');
-      return;
-    }
+    if (!botInfo) return;
     
     if (!match[1] || match[1] === `@${botInfo.username}`) {
       startGameRegistration(msg);
@@ -18,23 +16,67 @@ function setupCommandHandlers() {
     startGameRegistration(msg);
   });
 
-  bot.onText(/^\/stop(@\w+)?$/, (msg, match) => {
-    if (!botInfo) {
-      console.error('Bot info not initialized');
+  bot.onText(/^\/test$/, (msg) => {
+    if (isStarted) {
+      bot.sendMessage(msg.chat.id, "Спочатку завершіть поточну гру командою /stop");
       return;
     }
+
+    players.length = 0;
+    
+    players.push(
+      { 
+        id: msg.from.id, 
+        name: msg.from.first_name,
+        username: msg.from.username || "",
+        role: 'mafia',
+        isAlive: true
+      },
+      {
+        id: 123456789,
+        name: "Test Doctor",
+        username: "test_doctor",
+        role: 'doctor',
+        isAlive: true
+      },
+      {
+        id: 987654321,
+        name: "Test Commissioner",
+        username: "test_commissioner",
+        role: 'commissioner',
+        isAlive: true
+      },
+      {
+        id: 111222333,
+        name: "Test Citizen",
+        username: "test_citizen",
+        role: 'peaceful',
+        isAlive: true
+      }
+    );
+
+    bot.sendMessage(msg.chat.id, "🔄 Тестовий режим увімкнено\n\n" +
+      "Додані тестові гравці:\n" +
+      "1. Ви (мафія)\n" +
+      "2. Test Doctor (лікар)\n" +
+      "3. Test Commissioner (комісар)\n" +
+      "4. Test Citizen (мирний)\n\n" +
+      "Перевірте приватні повідомлення для тестування ролей."
+    ).then(() => {
+      sendRoleActionMessages();
+    });
+  });
+
+  bot.onText(/^\/stop(@\w+)?$/, (msg, match) => {
+    if (!botInfo) return;
 
     if (!match[1] || match[1] === `@${botInfo.username}`) {
       if (isStarted) {
         timeout = -1;
         bot.sendMessage(msg.chat.id, "<b>Реєстрацію на гру зупинено</b>", {
           parse_mode: "HTML",
-        }).catch(error => {
-          console.error("Error sending stop message:", error.message);
         });
-        bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
-          console.error("Error deleting stop command:", error.message);
-        });
+        bot.deleteMessage(msg.chat.id, msg.message_id);
         isStarted = false;
       } else {
         bot.sendMessage(msg.chat.id, `Цю команду є сенс використовувати після використання команди /start@${botInfo.username}`);
@@ -43,10 +85,7 @@ function setupCommandHandlers() {
   });
 
   bot.onText(/^\/extend(@\w+)?$/, (msg, match) => {
-    if (!botInfo) {
-      console.error('Bot info not initialized');
-      return;
-    }
+    if (!botInfo) return;
 
     if (!match[1] || match[1] === `@${botInfo.username}`) {
       if (!isStarted) {
@@ -69,13 +108,9 @@ function setupCommandHandlers() {
               }`
             : `${timeout} секунд`
         }`
-      ).catch(error => {
-        console.error("Error sending extend message:", error.message);
-      });
+      );
       
-      bot.deleteMessage(msg.chat.id, msg.message_id).catch(error => {
-        console.error("Error deleting extend command:", error.message);
-      });
+      bot.deleteMessage(msg.chat.id, msg.message_id);
     }
   });
 
@@ -92,9 +127,7 @@ function setupCommandHandlers() {
           name: fullName,
           username: username
         });
-        bot.answerCallbackQuery(callbackQuery.id).catch(error => {
-          console.error("Error answering callback query:", error.message);
-        });
+        bot.answerCallbackQuery(callbackQuery.id);
       }
     }
   });
