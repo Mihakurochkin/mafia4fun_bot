@@ -2,6 +2,7 @@ const { bot, botInfo } = require('../config/bot');
 const { players, timeout, isStarted, isNight, gameChatId } = require('../utils/gameState');
 const { assignRoles } = require('../utils/roles');
 const { checkBotRights, getMissingRightsMessage } = require('../utils/rights');
+const { generateBotMessage } = require('../utils/gemini');
 
 function createPlayerButtons(players, currentPlayerId, action) {
   return players
@@ -14,10 +15,8 @@ function createPlayerButtons(players, currentPlayerId, action) {
 
 async function unpinAllBotMessages(chatId) {
   try {
-    // Get all pinned messages
     const chat = await bot.getChat(chatId);
     if (chat.pinned_message) {
-      // Unpin all messages
       await bot.unpinAllChatMessages(chatId);
     }
   } catch (error) {
@@ -27,12 +26,18 @@ async function unpinAllBotMessages(chatId) {
 
 async function startGameRegistration(msg) {
   if (isStarted) {
-    bot.sendMessage(msg.chat.id, "Реєстрація на гру вже почалась");
+    console.log('Game already started, generating error message...');
+    const message = await generateBotMessage('error', { type: 'registration_already_started' });
+    console.log('Generated error message:', message);
+    bot.sendMessage(msg.chat.id, message);
     return;
   }
 
   if (isNight) {
-    bot.sendMessage(msg.chat.id, "Зараз ніч, почекайте до ранку");
+    console.log('Night time, generating error message...');
+    const message = await generateBotMessage('error', { type: 'night_time' });
+    console.log('Generated night error message:', message);
+    bot.sendMessage(msg.chat.id, message);
     return;
   }
 
@@ -45,11 +50,13 @@ async function startGameRegistration(msg) {
   isStarted = true;
   timeout = 30;
 
+  console.log('Starting game registration, generating initial message...');
+  const initialMessage = await generateBotMessage('gameStart', { timeout });
+  console.log('Generated initial message:', initialMessage);
+
   const registrationMessage = await bot.sendMessage(
     msg.chat.id,
-    "🎮 <b>Реєстрація на гру в Мафію</b>\n\n" +
-    "Натисніть кнопку нижче, щоб приєднатися до гри.\n" +
-    "Реєстрація триватиме 30 секунд.",
+    initialMessage,
     {
       parse_mode: "HTML",
       reply_markup: {
@@ -71,7 +78,8 @@ async function startGameRegistration(msg) {
       clearInterval(countdownInterval);
       if (players.length < 4) {
         isStarted = false;
-        bot.sendMessage(msg.chat.id, "Недостатньо гравців для початку гри. Мінімум 4 гравці.");
+        const message = await generateBotMessage('error', { type: 'not_enough_players' });
+        bot.sendMessage(msg.chat.id, message);
         await unpinAllBotMessages(msg.chat.id);
         return;
       }
@@ -79,47 +87,31 @@ async function startGameRegistration(msg) {
       await unpinAllBotMessages(msg.chat.id);
 
       const mafiaCount = Math.floor(players.length / 4);
-      const message = "🎮 <b>Гра почалась!</b>\n\n" +
-        "Кількість гравців: " + players.length + "\n" +
-        "Розподіл ролей:\n" +
-        "👥 Мирні: " + (players.length - mafiaCount) + "\n" +
-        "🕵️‍♂️ Мафія: " + mafiaCount + "\n\n" +
-        "Перевірте свої ролі в приватних повідомленнях.";
+      const message = await generateBotMessage('gameStart', {
+        playersCount: players.length,
+        mafiaCount: mafiaCount,
+        peacefulCount: players.length - mafiaCount
+      });
 
       bot.sendMessage(msg.chat.id, message, { parse_mode: "HTML" });
 
       assignRoles(players);
       for (const player of players) {
-        let roleMessage = '';
-        let actionButtons = [];
+        const roleMessage = await generateBotMessage('roleAssignment', {
+          role: player.role,
+          otherMafia: players
+            .filter(p => p.role === 'mafia' && p.id !== player.id)
+            .map(p => p.name)
+            .join(', ')
+        });
 
-        switch(player.role) {
-          case 'mafia':
-            roleMessage = `🕵️‍♂️ Ви - Мафія!\n\n` +
-              `Ваше завдання - усувати мирних жителів по черзі.\n` +
-              `Ви знаєте інших мафіозів: ${players
-                .filter(p => p.role === 'mafia' && p.id !== player.id)
-                .map(p => p.name)
-                .join(', ')}`;
-            actionButtons = createPlayerButtons(players, player.id, 'mafia_kill');
-            break;
-          case 'doctor':
-            roleMessage = `👨‍⚕️ Ви - Лікар!\n\n` +
-              `Ваше завдання - рятувати гравців від мафії.\n` +
-              `Кожну ніч ви можете вибрати одного гравця для порятунку.`;
-            actionButtons = createPlayerButtons(players, player.id, 'doctor_heal');
-            break;
-          case 'commissioner':
-            roleMessage = `👮 Ви - Комісар!\n\n` +
-              `Ваше завдання - викривати мафію.\n` +
-              `Кожну ніч ви можете перевірити роль одного гравця.`;
-            actionButtons = createPlayerButtons(players, player.id, 'commissioner_check');
-            break;
-          case 'peaceful':
-            roleMessage = `👨‍🌾 Ви - Мирний житель!\n\n` +
-              `Ваше завдання - знайти та усунути мафію.\n` +
-              `Обговорюйте та голосуйте разом з іншими гравцями.`;
-            break;
+        let actionButtons = [];
+        if (player.role === 'mafia') {
+          actionButtons = createPlayerButtons(players, player.id, 'mafia_kill');
+        } else if (player.role === 'doctor') {
+          actionButtons = createPlayerButtons(players, player.id, 'doctor_heal');
+        } else if (player.role === 'commissioner') {
+          actionButtons = createPlayerButtons(players, player.id, 'commissioner_check');
         }
 
         bot.sendMessage(player.id, roleMessage, {
@@ -132,21 +124,17 @@ async function startGameRegistration(msg) {
     } else {
       timeout--;
       if (timeout % 5 === 0) {
-        bot.editMessageText(
-          "🎮 <b>Реєстрація на гру в Мафію</b>\n\n" +
-          "Натисніть кнопку нижче, щоб приєднатися до гри.\n" +
-          "До кінця реєстрації: " + timeout + " секунд",
-          {
-            chat_id: msg.chat.id,
-            message_id: registrationMessage.message_id,
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "Приєднатися до гри", callback_data: "join_game" }]
-              ]
-            }
+        const message = await generateBotMessage('gameStart', { timeout });
+        bot.editMessageText(message, {
+          chat_id: msg.chat.id,
+          message_id: registrationMessage.message_id,
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Приєднатися до гри", callback_data: "join_game" }]
+            ]
           }
-        );
+        });
       }
     }
   }, 1000);

@@ -99,15 +99,7 @@ function setupCommandHandlers() {
       timeout += 30;
       bot.sendMessage(
         msg.chat.id,
-        `До часу реєстрації додано 30 секунд. До кінця реєстрації: ${
-          timeout >= 60
-            ? `${
-                timeout % 60 >= 60
-                  ? `${Math.floor(timeout / 60)} хвилини ${timeout % 60} секунд`
-                  : `1 хвилина ${timeout - 60} секунд`
-              }`
-            : `${timeout} секунд`
-        }`
+        `До часу реєстрації додано 30 секунд. До кінця реєстрації: ${timeout} секунд`
       );
       
       bot.deleteMessage(msg.chat.id, msg.message_id);

@@ -1,5 +1,6 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
+const { generateBotMessage } = require('./src/utils/gemini');
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 let botInfo = null;
 
@@ -15,7 +16,26 @@ const commands = [
   { command: "/start", description: "почати реєстрацію на гру" },
   { command: "/extend", description: "продовжити реєстрацію на 30 секунд" },
   { command: "/stop", description: "зупинити реєстрацію" },
+  { command: "/error", description: "показати повідомлення про помилку" },
+  { command: "/welcome", description: "показати привітання" },
+  { command: "/gamestart", description: "показати повідомлення про початок гри" },
+  { command: "/gameend", description: "показати повідомлення про кінець гри" },
+  { command: "/nightstart", description: "показати повідомлення про початок ночі" },
+  { command: "/daystart", description: "показати повідомлення про початок дня" },
+  { command: "/role", description: "показати повідомлення про призначення ролі" },
+  { command: "/votestart", description: "показати повідомлення про початок голосування" },
+  { command: "/voteend", description: "показати повідомлення про кінець голосування" },
+  { command: "/death", description: "показати повідомлення про смерть гравця" },
+  { command: "/win", description: "показати повідомлення про перемогу" },
+  { command: "/action", description: "показати повідомлення про дію ролі" },
+  { command: "/heal", description: "показати повідомлення про лікування" },
+  { command: "/check", description: "показати повідомлення про перевірку ролі" }
 ];
+
+bot.setMyCommands(commands).catch(error => {
+  console.error('Error setting bot commands:', error);
+});
+
 const players = [];
 const groupRights = new Map();
 let timeout = 60;
@@ -106,7 +126,7 @@ function startGameRegistration(msg) {
   isStarted = true;
   gameChatId = msg.chat.id;
 
-  checkBotRights(msg.chat.id).then(({ hasRights, missingRights }) => {
+  checkBotRights(msg.chat.id).then(async ({ hasRights, missingRights }) => {
     if (hasRights) {
       let registrationMessage = null;
       let lastMessageText = "";
@@ -171,7 +191,7 @@ function startGameRegistration(msg) {
 
       sendRegistrationMessage();
 
-      const intervalId = setInterval(() => {
+      const intervalId = setInterval(async () => {
         if (timeout === -1) {
           clearInterval(intervalId);
           return;
@@ -229,42 +249,49 @@ function startGameRegistration(msg) {
           });
 
           const playersWithRoles = assignRoles(players);
-          playersWithRoles.forEach(player => {
-            let roleMessage = '';
-            switch(player.role) {
-              case 'mafia':
-                roleMessage = `🎭 Ви - Мафія!\n\n` +
-                  `Ваше завдання - усувати мирних жителів по черзі.\n` +
-                  `Ви знаєте інших мафіозів: ${playersWithRoles
-                    .filter(p => p.role === 'mafia' && p.id !== player.id)
-                    .map(p => p.name)
-                    .join(', ')}`;
-                break;
-              case 'doctor':
-                roleMessage = `👨‍⚕️ Ви - Лікар!\n\n` +
-                  `Ваше завдання - рятувати гравців від мафії.\n` +
-                  `Кожну ніч ви можете вибрати одного гравця для порятунку.`;
-                break;
-              case 'commissioner':
-                roleMessage = `👮 Ви - Комісар!\n\n` +
-                  `Ваше завдання - викривати мафію.\n` +
-                  `Кожну ніч ви можете перевірити роль одного гравця.`;
-                break;
-              case 'peaceful':
-                roleMessage = `👨‍🌾 Ви - Мирний житель!\n\n` +
-                  `Ваше завдання - знайти та усунути мафію.\n` +
-                  `Обговорюйте та голосуйте разом з іншими гравцями.`;
-                break;
-            }
+          const sendRoleMessages = async () => {
+            for (const player of playersWithRoles) {
+              let roleMessage = '';
+              const otherMafia = playersWithRoles
+                .filter(p => p.role === 'mafia' && p.id !== player.id)
+                .map(p => p.name)
+                .join(', ');
 
-            bot.sendMessage(
-              player.id,
-              roleMessage,
-              { parse_mode: "HTML" }
-            ).catch(error => {
-              console.error(`Error sending role message to ${player.name}:`, error.message);
-            });
-          });
+              switch(player.role) {
+                case 'mafia':
+                  roleMessage = await generateBotMessage('roleAssignment', {
+                    role: 'mafia',
+                    otherMafia
+                  });
+                  break;
+                case 'doctor':
+                  roleMessage = await generateBotMessage('roleAssignment', {
+                    role: 'doctor'
+                  });
+                  break;
+                case 'commissioner':
+                  roleMessage = await generateBotMessage('roleAssignment', {
+                    role: 'commissioner'
+                  });
+                  break;
+                case 'peaceful':
+                  roleMessage = await generateBotMessage('roleAssignment', {
+                    role: 'peaceful'
+                  });
+                  break;
+              }
+
+              bot.sendMessage(
+                player.id,
+                roleMessage,
+                { parse_mode: "HTML" }
+              ).catch(error => {
+                console.error(`Error sending role message to ${player.name}:`, error.message);
+              });
+            }
+          };
+
+          await sendRoleMessages();
 
           isStarted = false;
           isNight = true;
@@ -354,7 +381,6 @@ bot.on("my_chat_member", async (msg) => {
   }
 });
 
-// Command handlers
 bot.onText(/^\/start(@\w+)?$/, (msg, match) => {
   if (!botInfo) {
     console.error('Bot info not initialized');
@@ -449,4 +475,88 @@ bot.on("callback_query", (callbackQuery) => {
       });
     }
   }
+});
+
+bot.onText(/^\/error(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('error', { type: 'registration_already_started' });
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/welcome(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('welcome');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/gamestart(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('gameStart', { timeout: 30 });
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/gameend(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('gameEnd');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/nightstart(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('nightStart');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/daystart(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('dayStart');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/role(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('roleAssignment', { role: 'mafia', otherMafia: 'Player1, Player2' });
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/votestart(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('voteStart');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/voteend(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('voteEnd');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/death(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('playerDeath');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/win(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('gameWin');
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/action(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('roleAction', { role: 'mafia' });
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/heal(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('doctorHeal', { playerName: 'Player1' });
+  bot.sendMessage(msg.chat.id, message);
+});
+
+bot.onText(/^\/check(@\w+)?$/, async (msg, match) => {
+  if (!botInfo || (match[1] && match[1] !== `@${botInfo.username}`)) return;
+  const message = await generateBotMessage('commissionerCheck', { playerName: 'Player1', isMafia: true });
+  bot.sendMessage(msg.chat.id, message);
 });

@@ -1,12 +1,11 @@
 const { bot } = require('../config/bot');
 const { players, isNight, gameChatId } = require('../utils/gameState');
+const { generateBotMessage } = require('../utils/gemini');
 
 let nightActions = new Map();
 let isTestMode = false;
 
 function setupRoleActions() {
-  console.log('Setting up role actions...');
-  
   bot.on("callback_query", async (callbackQuery) => {
     const [action, targetId] = callbackQuery.data.split('_');
     const userId = callbackQuery.from.id;
@@ -91,91 +90,95 @@ function setupRoleActions() {
   });
 }
 
-function sendRoleActionMessages() {
-  console.log('Sending role action messages...');
-  console.log('Current players:', players);
-  
-  if (isTestMode) {
-    console.log('In test mode');
-    const testPlayer = players[0];
-    if (!testPlayer) {
-      console.log('No test player found');
-      return;
-    }
+async function sendRoleActionMessages() {
+  if (!isNight) return;
 
-    const message = '🌙 Ніч настала. Тестовий режим:\n\n' +
-      '1. Мафія: Оберіть жертву\n' +
-      '2. Лікар: Оберіть кого врятувати\n' +
-      '3. Комісар: Перевірте роль';
-
-    const buttons = players
-      .filter(p => p.isAlive)
-      .map(p => [{
-        text: `${p.name} (${p.role})`,
-        callback_data: `mafia_kill_${p.id}`
-      }, {
-        text: `Врятувати ${p.name}`,
-        callback_data: `doctor_heal_${p.id}`
-      }, {
-        text: `Перевірити ${p.name}`,
-        callback_data: `commissioner_check_${p.id}`
-      }]);
-
-    buttons.push([{
-      text: isTestMode ? '🔴 Вимкнути тестовий режим' : '🟢 Увімкнути тестовий режим',
-      callback_data: 'test_mode'
-    }]);
-
-    console.log('Sending test mode message to:', testPlayer.id);
-    bot.sendMessage(testPlayer.id, message, {
-      reply_markup: {
-        inline_keyboard: buttons
-      }
-    }).catch(error => {
-      console.error('Error sending test mode message:', error);
-    });
-    return;
-  }
-
-  players.forEach(player => {
-    if (!player.isAlive) return;
+  for (const player of players) {
+    if (!player.isAlive) continue;
 
     let actionButtons = [];
-    switch(player.role) {
-      case 'mafia':
-        actionButtons = players
-          .filter(p => p.id !== player.id && p.isAlive)
-          .map(p => [{
-            text: p.name,
-            callback_data: `mafia_kill_${p.id}`
-          }]);
-        break;
-      case 'doctor':
-        actionButtons = players
-          .filter(p => p.id !== player.id && p.isAlive)
-          .map(p => [{
-            text: p.name,
-            callback_data: `doctor_heal_${p.id}`
-          }]);
-        break;
-      case 'commissioner':
-        actionButtons = players
-          .filter(p => p.id !== player.id && p.isAlive)
-          .map(p => [{
-            text: p.name,
-            callback_data: `commissioner_check_${p.id}`
-          }]);
-        break;
+    if (player.role === 'mafia') {
+      actionButtons = createPlayerButtons(players, player.id, 'mafia_kill');
+    } else if (player.role === 'doctor') {
+      actionButtons = createPlayerButtons(players, player.id, 'doctor_heal');
+    } else if (player.role === 'commissioner') {
+      actionButtons = createPlayerButtons(players, player.id, 'commissioner_check');
     }
 
     if (actionButtons.length > 0) {
-      bot.sendMessage(player.id, "🌙 Настала ніч. Виконайте свою дію:", {
+      const message = await generateBotMessage('roleAction', { role: player.role });
+      bot.sendMessage(player.id, message, {
+        parse_mode: "HTML",
         reply_markup: {
           inline_keyboard: actionButtons
         }
       });
     }
-  });
+  }
+}
+
+function createPlayerButtons(players, currentPlayerId, action) {
+  return players
+    .filter(player => player.id !== currentPlayerId && player.isAlive)
+    .map(player => [{
+      text: player.name,
+      callback_data: `${action}_${player.id}`
+    }]);
+}
+
+async function handleRoleAction(callbackQuery) {
+  const [action, targetId] = callbackQuery.data.split('_');
+  const player = players.find(p => p.id === callbackQuery.from.id);
+  const target = players.find(p => p.id === parseInt(targetId));
+
+  if (!player || !target || !isNight) {
+    bot.answerCallbackQuery(callbackQuery.id, {
+      text: "Ця дія недоступна",
+      show_alert: true
+    });
+    return;
+  }
+
+  let message;
+  switch (action) {
+    case 'mafia_kill':
+      if (player.role !== 'mafia') {
+        message = await generateBotMessage('error', { type: 'not_mafia' });
+      } else {
+        target.isAlive = false;
+        message = await generateBotMessage('playerDeath', { 
+          playerName: target.name,
+          role: target.role
+        });
+      }
+      break;
+
+    case 'doctor_heal':
+      if (player.role !== 'doctor') {
+        message = await generateBotMessage('error', { type: 'not_doctor' });
+      } else {
+        message = await generateBotMessage('doctorHeal', { playerName: target.name });
+      }
+      break;
+
+    case 'commissioner_check':
+      if (player.role !== 'commissioner') {
+        message = await generateBotMessage('error', { type: 'not_commissioner' });
+      } else {
+        const isMafia = target.role === 'mafia';
+        message = await generateBotMessage('commissionerCheck', { 
+          playerName: target.name,
+          isMafia: isMafia
+        });
+      }
+      break;
+  }
+
+  if (message) {
+    bot.sendMessage(player.id, message, { parse_mode: "HTML" });
+  }
+
+  bot.answerCallbackQuery(callbackQuery.id);
 }
 
 function processNightActions() {
@@ -210,5 +213,6 @@ function processNightActions() {
 module.exports = {
   setupRoleActions,
   sendRoleActionMessages,
-  processNightActions
+  processNightActions,
+  handleRoleAction
 }; 

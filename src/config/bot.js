@@ -8,7 +8,13 @@ const commands = [
   { command: "/start", description: "почати реєстрацію на гру" },
   { command: "/extend", description: "продовжити реєстрацію на 30 секунд" },
   { command: "/stop", description: "зупинити реєстрацію" },
-  { command: "/test", description: "увімкнути тестовий режим" }
+  { command: "/test", description: "увімкнути тестовий режим" },
+  { command: 'start', description: 'Почати гру в Мафію' },
+  { command: 'help', description: 'Показати список команд' },
+  { command: 'rules', description: 'Правила гри' },
+  { command: 'ask', description: 'Запитати щось у AI' },
+  { command: 'fact', description: 'Отримати цікавий факт про ігри' },
+  { command: 'game', description: 'Запитати про гру в Мафію' }
 ];
 
 bot.getMe().then(info => {
