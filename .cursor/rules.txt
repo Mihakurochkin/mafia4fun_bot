@@ -1,0 +1,35 @@
+# Project Structure
+src/
+  config/     # Configuration files
+  handlers/   # Event handlers
+  utils/      # Utility functions
+  index.js    # Main entry point
+
+# Code Style
+- Use 2 spaces for indentation
+- Use single quotes for strings
+- Max line length: 80 characters
+- Use semicolons at the end of statements
+
+# AI Messages
+- Max length: 30 characters
+- Max emojis: 1 per message
+- Use ellipsis for truncation
+- Keep messages concise
+
+# Event Triggers
+- Registration: "реєстрація почалась/продовжено/зупинено"
+- Game: "гра починається"
+- Death: "помер/вбито"
+- Night: "настала ніч"
+
+# Error Handling
+- Log errors with console.error
+- Include error message in logs
+- Don't expose error details to users
+
+# Git
+- Commit messages in English
+- Use conventional commit format
+- One feature/fix per commit
+- Keep commits atomic 

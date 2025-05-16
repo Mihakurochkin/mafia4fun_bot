@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Conventions and best practices for Node.js development in this project.
+globs:
+  - "backend/server/**/*.js" # Or "src/**/*.js", "*.js" if different structure
+  - "backend/server/**/*.mjs"
+  - "backend/server/**/*.cjs"
+alwaysApply: false
+---
+# Node.js Backend Conventions
+
+## Structure and Modularity
+- **Entry Point:** Likely `index.js`, `bot.js`, or `server.js`.
+- **Command/Event Handlers:** Look for directories like `commands/`, `events/`, `handlers/`. Create new handlers by analogy.
+- **Services/Logic:** Business logic might be in `services/`, `logic/`, or `core/`.
+- **Utilities:** Place helper functions in `utils/` or `helpers/`.
+- **Configuration:** Configuration parameters are likely in `config/` or loaded from `.env` files.
+## Coding Style and Patterns
+- Use ES6 modules (`import`/`export`). If the project is older, it might use CommonJS (`require`/`module.exports`).
+- Prefer `async/await` for asynchronous operations.
+- Handle errors properly (`try/catch` blocks for `async/await`, `.catch()` for promises).
+- Adhere to the single responsibility principle for modules and functions.
+- Use strict mode (`'use strict';`) at the beginning of files if agreed upon in the project.
+
+## Dependency Management
+- Dependencies are defined in `package.json`.
+- To install new dependencies, use `npm install <package>` or `yarn add <package>`.
+
+## API/External Service Interaction
+- API clients or functions for interacting with external services should be clearly defined, possibly in their own module or directory.
+- Do not store API keys and tokens directly in the code. Use environment variables.
+
+## Logging
+- Use the logging library established in the project (e.g., `winston`, `pino`) or standard `console.log/error` with prefixes.

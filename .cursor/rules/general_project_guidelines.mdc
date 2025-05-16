@@ -1,0 +1,44 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+alwaysApply: true
+description: General guidelines and files to ignore for the mafia4fun_bot project.
+---
+# General Project Guidelines for mafia4fun_bot
+
+## Project's Main Purpose
+This is the `mafia4fun_bot`, written in JavaScript (Node.js), designed for playing the "Mafia" game.
+
+## Key Technologies
+- **Language:** JavaScript (Node.js)
+- **Package Manager:** npm or yarn (presence of `package.json`, `package-lock.json` or `yarn.lock`)
+- **Main Entry Point (likely):** `index.js`, `bot.js`, `app.js`, or similar in the root or `src/`.
+- **Bot Framework (likely):** `discord.js`, `telegraf`, `node-telegram-bot-api`, or a custom solution.
+- **Database (possibly):** SQLite, PostgreSQL, MongoDB, Redis (check for configuration files or client libraries).
+## Files and Directories to Ignore
+- .git/
+- node_modules/
+- .env
+- *.log
+- logs/
+- build/
+- dist/
+- coverage/
+- .DS_Store
+- Thumbs.db
+- npm-debug.log*
+- yarn-debug.log*
+- yarn-error.log*
+- .idea/
+- .vscode/
+- *.tmp
+- *.swp
+
+## General AI Instructions
+- Adhere to the coding style adopted in the project.
+- Update `package.json` when adding new dependencies.
+- New modules should be written using ES6+ syntax (import/export).
+- Consider the asynchronous nature of Node.js (use `async/await` for promises).

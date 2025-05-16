@@ -1,0 +1,41 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Conventions for JavaScript-based frontend development.
+globs:
+  - "frontend/src/**/*.js"
+  - "frontend/src/**/*.jsx" # If using React/JSX
+  - "frontend/src/**/*.vue" # If using Vue
+  - "frontend/public/**/*.html"
+alwaysApply: false
+---
+# JavaScript Frontend Conventions
+
+## Project Structure (Typical)
+- `src/components/`: Reusable UI components.
+- `src/pages/` or `src/views/`: Components representing individual pages.
+- `src/services/` or `src/api/`: Logic for interacting with backend APIs.
+- `src/store/` or `src/context/`: State management (if using Redux, Vuex, Zustand, Context API).
+- `src/assets/`: Static resources (images, fonts, styles).
+- `public/index.html`: Main HTML file.
+- `src/index.js` or `src/main.js`: Entry point for the JavaScript frontend.
+
+## Framework/Library
+- Specify the main framework/library (React, Vue, Angular, Svelte, jQuery, or vanilla JS).
+- Adhere to the conventions and best practices of the chosen framework.
+
+## Styling
+- CSS, SCSS/SASS, CSS Modules, Styled Components, Tailwind CSS.
+- Follow the adopted styling methodology.
+## API Interaction
+- Use `Workspace` or libraries like `axios` for HTTP requests.
+- Handle responses and errors from the API.
+
+## State Management
+- If a global state manager is used, follow its patterns (actions, reducers/mutations, selectors/getters).
+
+## Routing
+- If client-side routing exists (e.g., `react-router-dom`, `vue-router`), define new routes in the appropriate configuration file.

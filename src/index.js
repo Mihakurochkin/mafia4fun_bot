@@ -3,7 +3,7 @@ const { isNight, gameChatId } = require('./utils/gameState');
 const { checkBotRights, getMissingRightsMessage } = require('./utils/rights');
 const { setupCommandHandlers } = require('./handlers/commands');
 const { setupRoleActions } = require('./handlers/roleActions');
-const { setupGeminiCommands } = require('./handlers/geminiCommands');
+const { setupAutoResponses } = require('./handlers/autoResponses');
 
 bot.setMyCommands(commands).then(() => {
   console.log('Bot commands set successfully');
@@ -60,4 +60,4 @@ bot.on("my_chat_member", async (msg) => {
 
 setupCommandHandlers();
 setupRoleActions();
-setupGeminiCommands(); 
+setupAutoResponses(); 

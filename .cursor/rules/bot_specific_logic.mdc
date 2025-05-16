@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Specifics of the mafia4fun_bot logic.
+globs:
+  - "backend/server/commands/**/*.js"  # Adapt if path is different
+  - "backend/server/handlers/**/*.js" # Adapt if path is different
+  - "backend/server/core_logic/**/*.js" # Adapt if path is different
+alwaysApply: false
+---
+# "mafia4fun_bot" Specific Logic
+
+## Command Handling
+- User commands are likely registered and processed through dedicated files/modules.
+- Pay attention to parsing command arguments.
+- Ensure validation of user input.
+
+## "Mafia" Game Logic
+- The core game logic (roles, day/night phases, voting, player actions) should be clearly structured.
+- There is likely game state management (who is alive, current phase, player roles).
+- Interaction with players (sending messages, receiving replies/actions) is key.
+
+## User/Session Management
+- A system for player registration, storing their data, or statistics might exist.
+
+## Platform Integration (Discord, Telegram, etc.)
+- The relevant library (`discord.js`, `telegraf`, etc.) is used.
+- Understand the specifics of the platform's API (limits, event types, message objects).
+## Important Files/Modules (Assumptions - verify in your project!)
+- `messageHandler.js` or `eventHandler.js`: Processing incoming messages/events.
+- `commandLoader.js` or `commandRegistry.js`: Loading and registering commands.
+- `gameManager.js` or `gameState.js`: Managing game state.
+- `roles.js`: Defining game roles and their abilities.
+- `config.js` or `settings.js`: Main bot settings.
+
+**For AI:** When generating code for new commands or modifying game logic, refer to existing patterns in these files/directories.

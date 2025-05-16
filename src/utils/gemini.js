@@ -12,7 +12,7 @@ const genAI = new GoogleGenerativeAI(apiKey);
 async function getGeminiResponse(prompt, context = "") {
   try {
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-pro",
+      model: "gemini-1.5-flash-8b",
       safetySettings: [
         {
           category: "HARM_CATEGORY_HARASSMENT",
@@ -47,6 +47,8 @@ async function getGeminiResponse(prompt, context = "") {
     
     const response = await result.response;
     const text = response.text();
+
+    console.log(response);
     
     if (!text) {
       return 'Помилка генерації повідомлення. Спробуйте ще раз.';

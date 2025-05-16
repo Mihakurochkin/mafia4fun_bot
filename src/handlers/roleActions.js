@@ -3,7 +3,6 @@ const { players, isNight, gameChatId } = require('../utils/gameState');
 const { generateBotMessage } = require('../utils/gemini');
 
 let nightActions = new Map();
-let isTestMode = false;
 
 function setupRoleActions() {
   bot.on("callback_query", async (callbackQuery) => {
@@ -80,11 +79,6 @@ function setupRoleActions() {
           text: `Ви перевіряєте ${target.name}`,
           show_alert: true
         });
-        break;
-
-      case 'test_mode':
-        isTestMode = !isTestMode;
-        bot.sendMessage(userId, `Тестовий режим ${isTestMode ? 'увімкнено' : 'вимкнено'}`);
         break;
     }
   });
@@ -207,7 +201,6 @@ function processNightActions() {
   }
 
   nightActions.clear();
-  isTestMode = false;
 }
 
 module.exports = {
